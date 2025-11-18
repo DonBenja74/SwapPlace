@@ -1,0 +1,69 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Información - SwapPlace{% endblock %}
+
+{% block content %}
+<style>
+.info-wrapper {
+    max-width: 900px;
+    margin: auto;
+    background: #fff;
+    padding: 30px;
+    border-radius: 15px;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.12);
+}
+
+.info-banner {
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.social-footer {
+    background: #0d6efd;
+    color: white;
+    padding: 20px;
+    margin-top: 35px;
+    text-align: center;
+    border-radius: 12px;
+}
+
+.social-footer a {
+    color: white;
+    margin: 0 10px;
+    text-decoration: none;
+    font-weight: bold;
+}
+.social-footer a:hover {
+    text-decoration: underline;
+}
+</style>
+
+<div class="info-wrapper mt-3">
+    <h2 class="text-center text-primary fw-bold mb-3">¿Quienes Somos?</h2>
+
+    <img src="{% static 'img/adorno.jpeg' %}" class="info-banner" alt="Banner" height="500" width="160">
+
+    <h4 class="text-primary">¿Qué es SwapPlace?</h4>
+    <p>
+        SwapPlace es una plataforma moderna pensada para facilitar el intercambio de productos entre usuarios.
+        Aquí puedes publicar, negociar y concretar trueques de manera segura.
+    </p>
+
+    <h4 class="text-primary mt-4">Nuestra Meta</h4>
+    <p>
+        Crear la mayor comunidad de trueques del país, enfocada en la reutilización, el comercio justo,
+        y la experiencia amigable para todos los usuarios.
+    </p>
+</div>
+
+<div class="social-footer">
+    <strong>Síguenos y contáctanos:</strong><br><i class="bi bi-instagram"></i>
+    <a href="#">Instagram</a> |<i class="bi bi-facebook"></i>
+    <a href="#">Facebook</a> |<i class="bi bi-whatsapp"></i>
+    <a href="https://wa.me/56900000000" target="_blank">WhatsApp</a>|<i class="bi bi-envelope-at"></i>
+    <a href="mailto:contacto@swapplace.com">Correo</a>|
+</div>
+
+{% endblock %}
