@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Panel de Insights{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h3 class="mb-1">Panel de Insights</h3>
+    <div class="text-muted mb-3">Estadísticas generales de SwapPlace</div>
+
+    <div class="row">
+
+        <div class="col-md-4 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h6 class="text-muted">Usuarios registrados</h6>
+                    <h2>{{ total_usuarios }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h6 class="text-muted">Productos publicados</h6>
+                    <h2>{{ total_productos }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4 mb-3">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <h6 class="text-muted">Trueques completados</h6>
+                    <h2>{{ trueques_aceptados }}</h2>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <h4 class="mt-4 mb-2">Top vendedores</h4>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+
+            {% if top_vendedores %}
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Productos</th>
+                            <th>Promedio estrellas</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for v in top_vendedores %}
+                        <tr>
+                            <td>{{ v.usuario.username }}</td>
+                            <td>{{ v.total_productos }}</td>
+                            <td>{{ v.promedio }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <p class="text-muted">No hay datos suficientes.</p>
+            {% endif %}
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

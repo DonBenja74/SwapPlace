@@ -6,7 +6,6 @@
 {% block content %}
 <style>
 #calificacionOverlay {
-    
     display: none;
     position: fixed;
     top: 0; left: 0;
@@ -112,6 +111,7 @@
   </div>
 </div>
 
+<!-- Overlay de calificación -->
 <div id="calificacionOverlay" style="display:none;">
   <div class="calificacion-card text-center">
     <button id="cerrarCalif" class="btn-close float-end" aria-label="Cerrar"></button>
@@ -128,7 +128,7 @@
   </div>
 </div>
 
-
+<!-- Toast -->
 <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:3000;">
   <div id="toastSwap" class="toast align-items-center text-bg-success border-0" role="alert">
     <div class="d-flex">
@@ -147,14 +147,17 @@ function mostrarToast(msg, tipo='success') {
   toastEl.className = `toast align-items-center text-bg-${tipo} border-0`;
   new bootstrap.Toast(toastEl).show();
 }
+
 function escapeHtml(t) {
   return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;")
           .replace(/>/g,"&gt;").replace(/"/g,"&quot;")
           .replace(/'/g,"&#039;");
 }
+
 const chatId = "{{ chat_seleccionado.id }}" || null;
 let lastMessageId = 0;
 
+/* Inicializar scroll */
 (function initLastId() {
   const box = document.getElementById('chat-box');
   if (!box) return;
@@ -164,6 +167,8 @@ let lastMessageId = 0;
   });
   box.scrollTop = box.scrollHeight;
 })();
+
+/* Polling de mensajes */
 if (chatId) {
   setInterval(async () => {
     try {
@@ -197,7 +202,7 @@ if (chatId) {
   }, 2000);
 }
 
-/*  Envío de mensaje */
+/* Enviar mensaje */
 const chatForm = document.getElementById("chat-form");
 if (chatForm) {
   chatForm.addEventListener("submit", async (e) => {
@@ -233,7 +238,7 @@ if (chatForm) {
   });
 }
 
-/* Reporte SIMULADO */
+/* Reporte */
 const btnReportar = document.getElementById("btn-reportar");
 if (btnReportar) {
   btnReportar.addEventListener("click", () => {
@@ -244,7 +249,7 @@ if (btnReportar) {
   });
 }
 
-/* Calificación SIMULADA */
+/* Calificación */
 const overlay = document.getElementById("calificacionOverlay");
 const btnCalificar = document.getElementById("btn-calificar");
 const cerrarCalifBtn = document.getElementById("cerrarCalif");
@@ -265,21 +270,11 @@ function cerrarOverlayCalif() {
   overlay.style.display = "none";
   overlay.classList.remove('d-flex');
 }
-if (btnCalificar) {
-  btnCalificar.addEventListener("click", () => {
-    abrirOverlayCalif();
-  });
-}
-if (cerrarCalifBtn) {
-  cerrarCalifBtn.addEventListener("click", () => {
-    cerrarOverlayCalif();
-  });
-}
-if (overlay) {
-  overlay.addEventListener("click", e => {
-    if (e.target === overlay) cerrarOverlayCalif();
-  });
-}
+
+if (btnCalificar) btnCalificar.addEventListener("click", abrirOverlayCalif);
+if (cerrarCalifBtn) cerrarCalifBtn.addEventListener("click", cerrarOverlayCalif);
+if (overlay) overlay.addEventListener("click", e => { if (e.target === overlay) cerrarOverlayCalif(); });
+
 if (stars && stars.length) {
   stars.forEach((s, i) => {
     s.addEventListener("click", () => {
@@ -290,13 +285,37 @@ if (stars && stars.length) {
   });
 }
 
-/* enviar calificación */
+/* Enviar calificación al backend */
 if (enviarCalifBtn) {
-  enviarCalifBtn.addEventListener("click", () => {
+  enviarCalifBtn.addEventListener("click", async () => {
     if (!calificacion)
       return mostrarToast("Selecciona una estrella", "warning");
-    cerrarOverlayCalif();
-    mostrarToast(`Calificación enviada: ${calificacion} ⭐`, "success");
+
+    try {
+      const urlTemplate = "{% url 'api_calificar_vendedor' 0 %}";
+      const url = urlTemplate.replace('/0/', `/${chatId}/`);
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value
+        },
+        body: JSON.stringify({ estrellas: calificacion })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        cerrarOverlayCalif();
+        mostrarToast(`Calificación enviada: ${calificacion} ⭐`, "success");
+      } else {
+        mostrarToast(data.error || "Error enviando calificación", "danger");
+      }
+    } catch (err) {
+      console.error(err);
+      mostrarToast("Error de conexión", "danger");
+    }
   });
 }
 </script>

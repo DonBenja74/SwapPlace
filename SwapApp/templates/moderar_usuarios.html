@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Moderación de Usuarios{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <h3 class="mb-1">Moderación de usuarios</h3>
+    <div class="text-muted mb-3">Acciones administrativas sobre cuentas</div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+
+            <h5 class="mb-3">Lista de Usuarios</h5>
+
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th>Strikes</th>
+                        <th>Estado</th>
+                        <th>Acción</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for usuario in usuarios %}
+                    <tr>
+                        <td>{{ usuario.username }}</td>
+
+                        <!-- CANTIDAD DE STRIKES -->
+                        <td>
+                            {{ usuario.moderacion_set.count }}
+                        </td>
+
+                        <!-- ESTADO -->
+                        <td>
+                            {% if usuario.moderacion_set.count >= 3 %}
+                                <span class="badge bg-danger">Para eliminar</span>
+                            {% elif usuario.moderacion_set.count > 0 %}
+                                <span class="badge bg-warning">Bajo moderación</span>
+                            {% else %}
+                                <span class="badge bg-success">Activo</span>
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+
+                                {% if usuario.moderacion_set.count >= 3 %}
+                                    <!-- Ya tiene 3 strikes -->
+                                    <button class="btn btn-secondary btn-sm" disabled>
+                                        Máximo de strikes alcanzado
+                                    </button>
+
+                                {% else %}
+                                    <input type="hidden" name="accion" value="bloquear">
+                                    <button class="btn btn-danger btn-sm">
+                                        Mandar Strike
+                                    </button>
+                                {% endif %}
+                            </form>
+
+                            {% if usuario.moderacion_set.count > 0 %}
+                            <form method="post" class="d-inline">
+                                {% csrf_token %}
+                                <input type="hidden" name="usuario_id" value="{{ usuario.id }}">
+                                <input type="hidden" name="accion" value="eliminar_strike">
+
+                                <button class="btn btn-primary btn-sm">
+                                    Reducir Strike
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+            </table>
+
+        </div>
+    </div>
+
+</div>
+{% endblock %}

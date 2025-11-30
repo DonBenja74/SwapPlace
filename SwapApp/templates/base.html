@@ -109,51 +109,79 @@ body {
 <body>
 
 <!-- NAVBAR -->
+<!-- NAVBAR -->
 <nav class="navbar navbar-expand-lg navbar-swap">
 <div class="container-fluid">
     <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}">
-    <img src="{% static 'img/logo Swap.png' %}" alt="logo" style="height:34px; width:34px; object-fit:contain; margin-right:8px; border-radius:6px;">
-    <span class="nav-brand-small">SwapPlace</span>
+        <img src="{% static 'img/logo Swap.png' %}" alt="logo" style="height:34px; width:34px; object-fit:contain; margin-right:8px; border-radius:6px;">
+        <span class="nav-brand-small">SwapPlace</span>
     </a>
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu" aria-controls="navMenu" aria-expanded="false" aria-label="Toggle navigation">
-    <span class="navbar-toggler-icon" style="color: #fff"><i class="bi bi-list" style="font-size:1.2rem;color:#fff"></i></span>
+        <span class="navbar-toggler-icon" style="color: #fff"><i class="bi bi-list" style="font-size:1.2rem;color:#fff"></i></span>
     </button>
 
     <div class="collapse navbar-collapse" id="navMenu">
-    <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-    </ul>
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0"></ul>
 
-    <div class="d-flex align-items-center nav-user">
+        <div class="d-flex align-items-center nav-user">
 
         {% if request.user.is_authenticated %}
-        <span class="text-white me-2">Hola, <strong>{{ request.user.username }}</strong></span>
-        <!--Informacion-->
-        <a href="{% url 'informacion' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="¿Quienes Somos?">
-            <i class="bi bi-info-square-fill"><br></i></i>   ¿Quienes Somos?
-        </a>
-        <!-- Chats -->
-        <a href="{% url 'chat_list' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="Chats">
-            <i class="bi bi-chat-dots-fill me-1"></i> Chats
-        </a>
-        <!-- Cerrar sesión -->
-        <a href="{% url 'logout' %}" class="btn nav-btn btn-danger ms-1 d-flex align-items-center" title="Cerrar sesión">
-            <i class="bi bi-box-arrow-right me-1"></i> Cerrar sesión
-        </a>
+            <span class="text-white me-2">Hola, <strong>{{ request.user.username }}</strong></span>
+
+            <!-- Información -->
+            <a href="{% url 'informacion' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="¿Quienes Somos?">
+                <i class="bi bi-info-square-fill me-1"></i> ¿Quiénes Somos?
+            </a>
+
+            <!-- Chats -->
+            <a href="{% url 'chat_list' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="Chats">
+                <i class="bi bi-chat-dots-fill me-1"></i> Chats
+            </a>
+
+            <!-- SOLO ADMIN3000: Moderar Usuario -->
+            {% if request.user.username == "admin3000" %}
+            <a href="{% url 'moderar_usuario' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="Moderar Usuarios">
+                <i class="bi bi-shield-check me-1"></i> Moderar
+            </a>
+            {% endif %}
+
+            <!-- Panel Insight -->
+            {% if request.user.username == "admin3000" %}
+            <a href="{% url 'panel_insight' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="Insights">
+                <i class="bi bi-bar-chart-line me-1"></i> Insights
+            </a>
+            {% endif %}
+
+            <!-- Panel Vendedor -->
+            <a href="{% url 'panel_vendedor' %}" class="btn nav-btn nav-btn-outline me-1 d-flex align-items-center" title="Panel Vendedor">
+                <i class="bi bi-shop-window me-1"></i> Vendedor
+            </a>
+
+            <!-- Cerrar sesión -->
+            <a href="{% url 'logout' %}" class="btn nav-btn btn-danger ms-1 d-flex align-items-center" title="Cerrar sesión">
+                <i class="bi bi-box-arrow-right me-1"></i> Cerrar sesión
+            </a>
 
         {% else %}
-        <a href="{% url 'login' %}" class="btn nav-btn nav-btn-outline me-2 d-flex align-items-center">
-            <i class="bi bi-box-arrow-in-right me-1"></i> Iniciar sesión
-        </a>
-        <a href="{% url 'registro' %}" class="btn nav-btn btn-light d-flex align-items-center">
-            <i class="bi bi-person-plus me-1"></i> Registrarse
-        </a>
+
+            <!-- Iniciar sesión -->
+            <a href="{% url 'login' %}" class="btn nav-btn nav-btn-outline me-2 d-flex align-items-center">
+                <i class="bi bi-box-arrow-in-right me-1"></i> Iniciar sesión
+            </a>
+
+            <!-- Registrarse -->
+            <a href="{% url 'registro' %}" class="btn nav-btn btn-light d-flex align-items-center">
+                <i class="bi bi-person-plus me-1"></i> Registrarse
+            </a>
+
         {% endif %}
 
-    </div>
+        </div>
     </div>
 </div>
 </nav>
+
 
 <div id="notif-container"></div>
 

@@ -6,16 +6,17 @@ from django.utils import timezone
 from django.http import JsonResponse, HttpResponseForbidden
 from django.views.decorators.http import require_POST
 from django.urls import reverse
-from django.db.models import Q
+from django.db.models import Q, Avg, Count
 from django.contrib import messages
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.timezone import localtime
-from .models import Producto, Trueque, Chat, Mensaje, Notificacion
+from .models import Producto, Trueque, Chat, Mensaje, Notificacion, Perfil, Moderacion, Calificacion
 from .forms import MensajeForm
 from datetime import timedelta
 import json
 
-# ---------- AUTH ----------
+
+# ---------------------- AUTH ----------------------
 def login_view(request):
     if request.user.is_authenticated:
         return redirect('home')
@@ -57,7 +58,7 @@ def logout_view(request):
     return redirect('login')
 
 
-# ---------- HOME ----------
+# ---------------------- HOME ----------------------
 @login_required
 def home_view(request):
     user = request.user
@@ -65,9 +66,23 @@ def home_view(request):
 
     notifs = Notificacion.objects.filter(usuario=user, visible=True).order_by('-creado')[:20]
     trueques_pendientes = Trueque.objects.filter(receptor=user, estado='pendiente').order_by('-fecha')
-    trueques_aceptados = Trueque.objects.filter(estado='aceptado').filter(Q(solicitante=user) | Q(receptor=user)).order_by('-fecha')
+    trueques_aceptados = Trueque.objects.filter(estado='aceptado').filter(
+        Q(solicitante=user) | Q(receptor=user)
+    ).order_by('-fecha')
 
-    # CREAR producto
+    # ------------------- RECOMENDACIONES -------------------
+    if hasattr(user, "perfil") and user.perfil.intereses:
+        intereses = [i.strip() for i in user.perfil.intereses.split(",") if i.strip()]
+        recomendaciones = Producto.objects.filter(
+            tags__nombre__in=intereses
+        ).exclude(usuario=user).distinct()[:8]
+        titulo_reco = "Recomendado según tus intereses"
+    else:
+        recomendaciones = Producto.objects.exclude(usuario=user).order_by('?')[:8]
+        titulo_reco = "Quizás te interese"
+    # -------------------------------------------------------
+
+    # CREAR
     if request.method == 'POST' and request.POST.get('action') == 'crear_producto':
         nombre = request.POST.get('nombre')
         descripcion = request.POST.get('descripcion')
@@ -79,7 +94,7 @@ def home_view(request):
             messages.error(request, 'Completa nombre y descripción.')
         return redirect('home')
 
-    # EDITAR producto
+    # EDITAR
     if request.method == 'POST' and request.POST.get('action') == 'editar_producto':
         producto_id = request.POST.get('producto_id')
         producto = get_object_or_404(Producto, id=producto_id)
@@ -93,7 +108,7 @@ def home_view(request):
         messages.success(request, 'Producto actualizado correctamente.')
         return redirect('home')
 
-    # ELIMINAR producto
+    # ELIMINAR
     if request.method == 'POST' and request.POST.get('action') == 'eliminar_producto':
         producto_id = request.POST.get('producto_id')
         producto = get_object_or_404(Producto, id=producto_id)
@@ -103,7 +118,7 @@ def home_view(request):
         messages.success(request, 'Producto eliminado correctamente.')
         return redirect('home')
 
-    # OFRECER trueque
+    # OFRECER TRUEQUE
     if request.method == 'POST' and request.POST.get('action') == 'ofrecer_trueque':
         producto = get_object_or_404(Producto, id=request.POST.get('producto_id'))
         if producto.usuario == user:
@@ -120,7 +135,7 @@ def home_view(request):
         messages.success(request, 'Solicitud de trueque enviada.')
         return redirect('home')
 
-    # RESPONDER trueque
+    # RESPONDER TRUEQUE
     if request.method == 'POST' and request.POST.get('action') == 'responder_trueque':
         trueque = get_object_or_404(Trueque, id=request.POST.get('trueque_id'))
         if trueque.receptor != user:
@@ -132,6 +147,7 @@ def home_view(request):
             chat, created = Chat.objects.get_or_create(trueque=trueque)
             chat.usuarios.set([trueque.solicitante, trueque.receptor])
             chat_url = reverse('chat_detalle', args=[chat.id])
+
             Notificacion.objects.create(
                 usuario=trueque.solicitante,
                 titulo='Trueque aceptado',
@@ -165,15 +181,15 @@ def home_view(request):
         'notificaciones': notifs,
         'trueques_pendientes': trueques_pendientes,
         'trueques_aceptados': trueques_aceptados,
-        'chats': Chat.objects.filter(usuarios=user).order_by('-creado'),  # <-- más recientes primero
+        'chats': Chat.objects.filter(usuarios=user).order_by('-creado'),
+        'recomendaciones': recomendaciones,
+        'titulo_reco': titulo_reco,
     }
+
     return render(request, 'home.html', context)
 
 
-# ---------- BUSQUEDA (API para el buscador en tiempo real) ----------
-from django.http import JsonResponse
-from django.db.models import Q
-
+# ---------------------- BUSQUEDA ----------------------
 @login_required
 def buscar_productos(request):
     texto = request.GET.get("q", "")
@@ -196,7 +212,7 @@ def buscar_productos(request):
     return JsonResponse({"productos": lista})
 
 
-# ---------- CRUD DE PRODUCTOS ----------
+# ---------------------- CRUD PRODUCTOS ----------------------
 @login_required
 def crear_producto(request):
     if request.method == 'POST':
@@ -235,7 +251,7 @@ def eliminar_producto(request, producto_id):
     return redirect('home')
 
 
-# ---------- TRUEQUES ----------
+# ---------------------- TRUEQUES ----------------------
 @login_required
 def ofrecer_trueque(request, producto_id):
     producto = get_object_or_404(Producto, id=producto_id)
@@ -300,10 +316,10 @@ def rechazar_trueque(request, trueque_id):
     return redirect('home')
 
 
-# ---------- CHAT ----------
+# ---------------------- CHAT ----------------------
 @login_required
 def chat_list_view(request):
-    chats = Chat.objects.filter(usuarios=request.user).order_by('-creado')  # más recientes primero
+    chats = Chat.objects.filter(usuarios=request.user).order_by('-creado')
     return render(request, 'chat.html', {'chats': chats, 'user': request.user})
 
 
@@ -318,7 +334,7 @@ def chat_detalle(request, chat_id):
         'chat': chat,
         'mensajes': mensajes,
         'form': form,
-        'chats': Chat.objects.filter(usuarios=request.user).order_by('-creado'),  # orden descendente
+        'chats': Chat.objects.filter(usuarios=request.user).order_by('-creado'),
         'chat_seleccionado': chat
     })
 
@@ -326,10 +342,6 @@ def chat_detalle(request, chat_id):
 @login_required
 @csrf_exempt
 def api_send_message(request, chat_id):
-    """
-    Espera JSON: { "texto": "..." }
-    Devuelve JSON con 'mensaje' con id/autor/contenido/fecha.
-    """
     if request.method == 'POST':
         try:
             data = json.loads(request.body.decode('utf-8'))
@@ -366,9 +378,6 @@ def api_send_message(request, chat_id):
 
 @login_required
 def api_fetch_messages(request, chat_id):
-    """
-    Devuelve mensajes. Opcional GET param 'since_id' para traer solo mensajes con id > since_id.
-    """
     chat = get_object_or_404(Chat, id=chat_id)
     if request.user not in chat.usuarios.all():
         return JsonResponse({'error': 'No autorizado'}, status=403)
@@ -394,7 +403,7 @@ def api_fetch_messages(request, chat_id):
     return JsonResponse({'mensajes': datos})
 
 
-# ---------- NOTIFICACIONES ----------
+# ---------------------- NOTIFICACIONES ----------------------
 @login_required
 def api_notificaciones(request):
     user = request.user
@@ -428,7 +437,7 @@ def api_marcar_leida(request):
         return JsonResponse({'ok': False, 'error': 'No encontrada'}, status=404)
 
 
-# ---------- NUEVAS FUNCIONES: REPORTAR Y CALIFICAR ----------
+# ---------------------- REPORTAR & CALIFICAR ----------------------
 @login_required
 @require_POST
 def reportar_chat(request, chat_id):
@@ -442,23 +451,164 @@ def reportar_chat(request, chat_id):
         "Recibirá la noticia de este caso en las próximas 72 hrs. "
         "Gracias por preferir SwapPlace."
     )
-    # Aquí podrías guardar un registro de report en la BD para revisión
     return JsonResponse({'ok': True, 'mensaje': mensaje_texto})
 
-
+# Calificacion
 @login_required
-@require_POST
+@csrf_exempt
 def calificar_chat(request, chat_id):
-    chat = get_object_or_404(Chat, id=chat_id)
-    if request.user not in chat.usuarios.all():
-        return JsonResponse({'ok': False, 'error': 'No autorizado'}, status=403)
-    rating = request.POST.get('rating')
-    try:
-        rating = int(rating)
-    except (TypeError, ValueError):
-        return JsonResponse({'ok': False, 'error': 'Rating inválido'}, status=400)
-    if rating < 1 or rating > 5:
-        return JsonResponse({'ok': False, 'error': 'Fuera de rango'}, status=400)
+    """
+    Permite que un usuario califique a otro usuario en un chat.
+    """
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Método no permitido"}, status=405)
 
-    # Aquí guardarías el rating en la BD si tienes un modelo para eso (no incluido en el ejemplo)
-    return JsonResponse({'ok': True, 'mensaje': f'Calificación de {rating} estrellas registrada correctamente.'})
+    try:
+        data = json.loads(request.body)
+        estrellas = int(data.get("estrellas", 0))
+        if estrellas < 1 or estrellas > 5:
+            return JsonResponse({"ok": False, "error": "Valor de estrellas inválido"}, status=400)
+        
+        chat = Chat.objects.get(id=chat_id)
+        if request.user not in chat.usuarios.all():
+            return JsonResponse({"ok": False, "error": "No autorizado"}, status=403)
+
+        # El vendedor es quien no es el usuario que califica
+        vendedor = next(u for u in chat.usuarios.all() if u != request.user)
+
+        # Crear o actualizar calificación
+        calificacion, created = Calificacion.objects.update_or_create(
+            vendedor=vendedor,
+            comprador=request.user,
+            trueque=chat.trueque,
+            defaults={"estrellas": estrellas}
+        )
+
+        # Actualizar perfil del vendedor
+        perfil_vendedor, _ = Perfil.objects.get_or_create(usuario=vendedor)
+        perfil_vendedor.agregar_calificacion(estrellas)
+
+        return JsonResponse({"ok": True, "estrellas": estrellas})
+
+    except Chat.DoesNotExist:
+        return JsonResponse({"ok": False, "error": "Chat no encontrado"}, status=404)
+    except Exception as e:
+        return JsonResponse({"ok": False, "error": str(e)}, status=500)
+
+# ---------------------- PANEL DEL VENDEDOR ----------------------
+@login_required
+def panel_vendedor(request):
+    perfil, _ = Perfil.objects.get_or_create(usuario=request.user)
+
+    productos = Producto.objects.filter(usuario=request.user)
+    total_productos = productos.count()
+    total_visitas = sum(p.visitas for p in productos)
+    promedio_estrellas = perfil.promedio_estrellas()
+
+    # NUEVO: Contar trueques recibidos
+    total_trueques_recibidos = Trueque.objects.filter(
+        receptor=request.user
+    ).count()
+
+    return render(request, 'panel_vendedor.html', {
+        'perfil': perfil,
+        'productos': productos,
+        'total_productos_vendedor': total_productos,
+        'total_visitas': total_visitas,
+        'promedio_estrellas': promedio_estrellas,
+        'total_trueques_recibidos': total_trueques_recibidos,
+    })
+
+# ---------------------- INSIGHTS ADMIN ----------------------
+@login_required
+def panel_insight(request):
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Acceso denegado.")
+
+    producto_mas_solicitado = (
+        Trueque.objects.values("producto__nombre")
+        .annotate(total=Count("id"))
+        .order_by("-total")
+        .first()
+    )
+
+    total_trueques = Trueque.objects.count()
+    total_usuarios = User.objects.count()
+    total_productos = Producto.objects.count()
+
+    return render(request, "panel_insights.html", {
+        "producto_mas_solicitado": producto_mas_solicitado,
+        "total_trueques": total_trueques,
+        "total_usuarios": total_usuarios,
+        "total_productos": total_productos,
+    })
+
+# ---------------------- MODERAR USUARIOS ----------------------
+@login_required
+def moderar_usuario(request):
+    if not request.user.is_superuser or request.user.username != "admin3000":
+        return HttpResponseForbidden("Acceso denegado.")
+
+    if request.method == "POST":
+        usuario_id = request.POST.get("usuario_id")
+        accion = request.POST.get("accion")
+
+        usuario = get_object_or_404(User, id=usuario_id)
+
+        # Asegurar que el usuario tenga Perfil
+        perfil, creado = Perfil.objects.get_or_create(usuario=usuario)
+
+        if accion == "bloquear":
+            # 1. Bloquear usuario
+            moderacion, created = Moderacion.objects.get_or_create(usuario=usuario)
+            moderacion.estado = "bloqueado"
+            moderacion.save()
+
+            # 2. Registrar strike
+            perfil.advertencias += 1
+            perfil.save()
+
+            # 3. Notificación al usuario
+            Notificacion.objects.create(
+                usuario=usuario,
+                titulo="Has recibido un strike",
+                mensaje=f"Tu cuenta ha recibido un strike. Strike {perfil.advertencias}/3.",
+                tipo="alerta"
+            )
+
+            # 4. Si llega a 3 strikes → eliminar usuario
+            if perfil.advertencias >= 3:
+                Notificacion.objects.create(
+                    usuario=usuario,
+                    titulo="Cuenta eliminada",
+                    mensaje="Tu cuenta ha sido eliminada por acumular 3 strikes.",
+                    tipo="peligro"
+                )
+
+                # Eliminar contenido asociado
+                Producto.objects.filter(usuario=usuario).delete()
+                Trueque.objects.filter(solicitante=usuario).delete()
+                Trueque.objects.filter(receptor=usuario).delete()
+                Chat.objects.filter(usuarios=usuario).delete()
+
+                usuario.delete()
+
+                return redirect('moderar_usuario')
+
+        elif accion == "desbloquear":
+            Moderacion.objects.filter(usuario=usuario).update(estado="activo")
+
+            Notificacion.objects.create(
+                usuario=usuario,
+                titulo="Tu cuenta ha sido desbloqueada",
+                mensaje="Un administrador ha restaurado el acceso a tu cuenta.",
+                tipo="info"
+            )
+
+    usuarios = User.objects.all()
+    moderados = Moderacion.objects.all()
+
+    return render(request, "moderar_usuarios.html", {
+        "usuarios": usuarios,
+        "moderados": moderados,
+    })

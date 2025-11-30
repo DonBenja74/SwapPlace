@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Panel del Vendedor{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <!-- Encabezado -->
+    <div class="d-flex align-items-center mb-2">
+        <h3 class="mb-0 fw-bold">Panel del Vendedor</h3>
+    </div>
+    <div class="text-muted mb-4">Resumen de tu actividad y rendimiento</div>
+
+    <!-- MÉTRICAS -->
+    <div class="row g-3 mb-4">
+
+        <div class="col-md-4">
+            <div class="card shadow-sm rounded-3 border-0">
+                <div class="card-body">
+                    <h6 class="text-muted mb-1">Tus productos publicados</h6>
+                    <h2 class="fw-bold">{{ total_productos_vendedor }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm rounded-3 border-0">
+                <div class="card-body">
+                    <h6 class="text-muted mb-1">Trueques recibidos</h6>
+                    <h2 class="fw-bold">{{ total_trueques_recibidos }}</h2>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm rounded-3 border-0">
+                <div class="card-body">
+                    <h6 class="text-muted mb-1">Promedio de calificaciones</h6>
+                    <h2 class="fw-bold">
+                        {{ promedio_estrellas }}
+                        {% if promedio_estrellas > 0 %}
+                            <span class="text-warning">★</span>
+                        {% endif %}
+                    </h2>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TÍTULO DE PRODUCTOS -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-semibold mb-0">Tus productos</h4>
+        <a href="/producto/crear/" class="btn btn-primary btn-sm">+ Nuevo producto</a>
+    </div>
+
+    <!-- LISTA DE PRODUCTOS -->
+    <div class="row g-4">
+
+        {% for p in productos %}
+        <div class="col-md-3">
+            <div class="card h-100 shadow-sm border-0 rounded-3 overflow-hidden">
+
+                {% if p.imagen %}
+                    <img src="{{ p.imagen.url }}" class="card-img-top" style="height:180px; object-fit:cover;">
+                {% else %}
+                    <img src="{% static 'img/logo.png' %}" class="card-img-top" style="height:180px; object-fit:contain; background:#f0f0f0;">
+                {% endif %}
+
+                <div class="card-body d-flex flex-column">
+                    <h6 class="fw-bold">{{ p.nombre }}</h6>
+                    <p class="text-muted small text-truncate">{{ p.descripcion }}</p>
+
+                    <div class="mt-auto d-flex justify-content-between">
+                        <a href="#" class="btn btn-outline-primary btn-sm">Editar</a>
+                        <a href="#" class="btn btn-outline-danger btn-sm">Eliminar</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12">
+            <p class="text-muted text-center">Aún no has publicado productos.</p>
+        </div>
+        {% endfor %}
+
+    </div>
+
+</div>
+{% endblock %}
