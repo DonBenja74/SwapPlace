@@ -612,3 +612,23 @@ def moderar_usuario(request):
         "usuarios": usuarios,
         "moderados": moderados,
     })
+
+@login_required
+def api_strikes(request):
+    """
+    Devuelve las notificaciones de strike NO leídas.
+    """
+    notifs = Notificacion.objects.filter(
+        usuario=request.user,
+        visible=True,
+        tipo__in=["alerta", "peligro"]   # Las que son strikes
+    ).order_by('-creado')
+
+    data = [{
+        "id": n.id,
+        "titulo": n.titulo,
+        "mensaje": n.mensaje,
+        "fecha": n.creado.isoformat(),
+    } for n in notifs]
+
+    return JsonResponse({"strikes": data})

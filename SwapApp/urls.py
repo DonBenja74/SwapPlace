@@ -31,6 +31,7 @@ urlpatterns = [
     # NOTIFICACIONES API
     path('api/notificaciones/', views.api_notificaciones, name='api_notificaciones'),
     path('api/notificaciones/marcar/', views.api_marcar_leida, name='api_marcar_leida'),
+    path("api/strikes/", views.api_strikes, name="api_strikes"),
 
     # PANELES
     path('panel/vendedor/', views.panel_vendedor, name='panel_vendedor'),

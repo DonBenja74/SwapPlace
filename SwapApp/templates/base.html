@@ -199,6 +199,36 @@ body {
 
 <script>
 
+function revisarStrikes() {
+    fetch("/api/strikes/")
+        .then(r => r.json())
+        .then(data => {
+            if (data.strikes.length > 0) {
+                data.strikes.forEach(s => mostrarStrike(s));
+            }
+        });
+}
+
+// Real time cada 2 segundos
+setInterval(revisarStrikes, 2000);
+
+function mostrarStrike(s) {
+    const div = document.createElement("div");
+    div.className = "alert alert-danger shadow-lg";
+    div.style.position = "fixed";
+    div.style.bottom = "20px";
+    div.style.right = "20px";
+    div.style.zIndex = 9999;
+    div.innerHTML = `
+        <strong>${s.titulo}</strong><br>
+        ${s.mensaje}
+    `;
+    document.body.appendChild(div);
+
+    // Desaparecer después de 6 segundos
+    setTimeout(() => div.remove(), 6000);
+}
+
 function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
