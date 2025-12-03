@@ -13,6 +13,7 @@ from django.utils.timezone import localtime
 from .models import Producto, Trueque, Chat, Mensaje, Notificacion, Perfil, Moderacion, Calificacion
 from .forms import MensajeForm
 from datetime import timedelta
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 import json
 
 
@@ -57,20 +58,38 @@ def logout_view(request):
     logout(request)
     return redirect('login')
 
-
 # ---------------------- HOME ----------------------
 @login_required
 def home_view(request):
     user = request.user
-    productos = Producto.objects.all().order_by('-fecha_agregado')
 
+    # ---------------------------------------
+    # PAGINADOR (9 productos por página)
+    # ---------------------------------------
+    productos_qs = Producto.objects.all().order_by('-fecha_agregado')
+
+    paginator = Paginator(productos_qs, 9)
+    page = request.GET.get('page', 1)
+
+    try:
+        productos = paginator.page(page)
+    except PageNotAnInteger:
+        productos = paginator.page(1)
+    except EmptyPage:
+        productos = paginator.page(paginator.num_pages)
+
+    # ---------------------------------------
+    # NOTIFICACIONES Y TRUEQUES
+    # ---------------------------------------
     notifs = Notificacion.objects.filter(usuario=user, visible=True).order_by('-creado')[:20]
     trueques_pendientes = Trueque.objects.filter(receptor=user, estado='pendiente').order_by('-fecha')
     trueques_aceptados = Trueque.objects.filter(estado='aceptado').filter(
         Q(solicitante=user) | Q(receptor=user)
     ).order_by('-fecha')
 
-    # ------------------- RECOMENDACIONES -------------------
+    # ---------------------------------------
+    # RECOMENDACIONES
+    # ---------------------------------------
     if hasattr(user, "perfil") and user.perfil.intereses:
         intereses = [i.strip() for i in user.perfil.intereses.split(",") if i.strip()]
         recomendaciones = Producto.objects.filter(
@@ -80,13 +99,15 @@ def home_view(request):
     else:
         recomendaciones = Producto.objects.exclude(usuario=user).order_by('?')[:8]
         titulo_reco = "Quizás te interese"
-    # -------------------------------------------------------
 
-    # CREAR
+    # ---------------------------------------
+    # CREAR Producto
+    # ---------------------------------------
     if request.method == 'POST' and request.POST.get('action') == 'crear_producto':
         nombre = request.POST.get('nombre')
         descripcion = request.POST.get('descripcion')
         imagen = request.FILES.get('imagen')
+
         if nombre and descripcion:
             Producto.objects.create(usuario=user, nombre=nombre, descripcion=descripcion, imagen=imagen)
             messages.success(request, 'Producto creado correctamente.')
@@ -94,12 +115,13 @@ def home_view(request):
             messages.error(request, 'Completa nombre y descripción.')
         return redirect('home')
 
-    # EDITAR
+    # ---------------------------------------
+    # EDITAR Producto
+    # ---------------------------------------
     if request.method == 'POST' and request.POST.get('action') == 'editar_producto':
         producto_id = request.POST.get('producto_id')
         producto = get_object_or_404(Producto, id=producto_id)
 
-        # Permiso: dueño o admin3000
         if producto.usuario != user and user.username != 'admin3000':
             return HttpResponseForbidden("No tienes permiso para editar.")
 
@@ -113,12 +135,13 @@ def home_view(request):
         messages.success(request, 'Producto actualizado correctamente.')
         return redirect('home')
 
-    # ELIMINAR
+    # ---------------------------------------
+    # ELIMINAR Producto
+    # ---------------------------------------
     if request.method == 'POST' and request.POST.get('action') == 'eliminar_producto':
         producto_id = request.POST.get('producto_id')
         producto = get_object_or_404(Producto, id=producto_id)
 
-        # Permiso: dueño o admin3000
         if producto.usuario != user and user.username != 'admin3000':
             return HttpResponseForbidden("No tienes permiso para eliminar.")
 
@@ -126,13 +149,17 @@ def home_view(request):
         messages.success(request, 'Producto eliminado correctamente.')
         return redirect('home')
 
+    # ---------------------------------------
     # OFRECER TRUEQUE
+    # ---------------------------------------
     if request.method == 'POST' and request.POST.get('action') == 'ofrecer_trueque':
         producto = get_object_or_404(Producto, id=request.POST.get('producto_id'))
         if producto.usuario == user:
             messages.error(request, 'No puedes ofrecer por tu propio producto.')
             return redirect('home')
+
         t = Trueque.objects.create(solicitante=user, receptor=producto.usuario, producto=producto)
+
         Notificacion.objects.create(
             usuario=producto.usuario,
             titulo='Nueva solicitud de trueque',
@@ -140,18 +167,25 @@ def home_view(request):
             tipo='nuevo_trueque',
             link=reverse('home')
         )
+
         messages.success(request, 'Solicitud de trueque enviada.')
         return redirect('home')
 
+    # ---------------------------------------
     # RESPONDER TRUEQUE
+    # ---------------------------------------
     if request.method == 'POST' and request.POST.get('action') == 'responder_trueque':
         trueque = get_object_or_404(Trueque, id=request.POST.get('trueque_id'))
+
         if trueque.receptor != user:
             return HttpResponseForbidden("No tienes permiso.")
+
         decision = request.POST.get('decision')
+
         if decision == 'aceptar':
             trueque.estado = 'aceptado'
             trueque.save()
+
             chat, created = Chat.objects.get_or_create(trueque=trueque)
             chat.usuarios.set([trueque.solicitante, trueque.receptor])
             chat_url = reverse('chat_detalle', args=[chat.id])
@@ -159,21 +193,25 @@ def home_view(request):
             Notificacion.objects.create(
                 usuario=trueque.solicitante,
                 titulo='Trueque aceptado',
-                mensaje=f'{trueque.receptor.username} aceptó tu solicitud. Pulsa Ver chat.',
+                mensaje=f'{trueque.receptor.username} aceptó tu solicitud.',
                 tipo='trueque_aceptado',
                 link=chat_url
             )
+
             Notificacion.objects.create(
                 usuario=trueque.receptor,
                 titulo='Trueque aceptado',
-                mensaje=f'Aceptaste la solicitud de {trueque.solicitante.username}. Pulsa Ver chat.',
+                mensaje=f'Aceptaste la solicitud de {trueque.solicitante.username}.',
                 tipo='trueque_aceptado',
                 link=chat_url
             )
+
             messages.success(request, 'Trueque aceptado. Chat creado.')
+
         else:
             trueque.estado = 'rechazado'
             trueque.save()
+
             Notificacion.objects.create(
                 usuario=trueque.solicitante,
                 titulo='Trueque rechazado',
@@ -181,11 +219,16 @@ def home_view(request):
                 tipo='trueque_rechazado',
                 link=reverse('home')
             )
+
             messages.info(request, 'Trueque rechazado.')
+
         return redirect('home')
 
+    # ---------------------------------------
+    # CONTEXTO
+    # ---------------------------------------
     context = {
-        'productos': productos,
+        'productos': productos,  # paginados
         'notificaciones': notifs,
         'trueques_pendientes': trueques_pendientes,
         'trueques_aceptados': trueques_aceptados,
@@ -212,7 +255,7 @@ def buscar_productos(request):
             "nombre": p.nombre,
             "descripcion": p.descripcion[:120] + ("..." if len(p.descripcion) > 120 else ""),
             "usuario": p.usuario.username,
-            "imagen": p.imagen.url if p.imagen else "/static/img/logo.png",
+            "imagen": p.imagen.url if p.imagen else "/static/img/Nofoto.png",
             "es_dueno": (request.user == p.usuario) or (request.user.username == "admin3000"),
         })
 
@@ -524,6 +567,46 @@ def api_marcar_leida(request):
         return JsonResponse({'ok': True})
     except Notificacion.DoesNotExist:
         return JsonResponse({'ok': False, 'error': 'No encontrada'}, status=404)
+
+#Cerrar trato:
+@require_POST
+@login_required
+def api_cerrar_trato(request, chat_id):
+    chat = get_object_or_404(Chat, id=chat_id)
+    trueque = chat.trueque
+    user = request.user
+    data = json.loads(request.body)
+
+    accion = data.get("accion")  # "aceptar" o "rechazar"
+
+    # Si ya está cerrado, no permitir nada
+    if trueque.estado in ["rechazado", "finalizado"]:
+        return JsonResponse({"ok": False, "error": "chat_cerrado"}, status=400)
+
+    # Si rechaza cualquiera → cierre inmediato
+    if accion == "rechazar":
+        trueque.estado = "rechazado"
+        trueque.save()
+        return JsonResponse({"ok": True, "final": True, "estado": "rechazado"})
+
+    # Si acepta → marcar aceptación dependiendo si es vendedor o comprador
+    if user == trueque.solicitante:
+        trueque.comprador_acepto = True
+    else:
+        trueque.vendedor_acepto = True
+
+    trueque.save()
+
+    # Si ambos aceptaron → finalizado
+    if trueque.comprador_acepto and trueque.vendedor_acepto:
+        trueque.estado = "finalizado"
+        trueque.producto.estado = "inactivo"
+        trueque.producto.save()
+        trueque.save()
+        return JsonResponse({"ok": True, "final": True, "estado": "finalizado"})
+
+    return JsonResponse({"ok": True, "final": False, "estado": "esperando"})
+
 
 
 # ---------------------- REPORTAR & CALIFICAR ----------------------

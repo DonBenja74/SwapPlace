@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/chat/<int:chat_id>/messages/', views.api_fetch_messages, name='api_fetch_messages'),
     path("api/chat/<int:chat_id>/productos/", views.api_productos_usuario_chat, name="api_productos_usuario_chat"),
     path("chat/crear-trueque/", views.crear_trueque_desde_chat, name="crear_trueque_desde_chat"),
+    
 
 
 
