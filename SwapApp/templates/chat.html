@@ -26,14 +26,16 @@
 .star.selected { color: #FFD700; transform: scale(1.05); }
 
 #chat-list .list-group-item { border-radius:8px; margin-bottom:6px; }
+
 #chat-box {
     background: rgba(110,201,255,0.06);
     border-radius:12px;
     padding:12px;
-    height:350px;
+    height:260px; 
     overflow-y:auto;
     border:1px solid #e3f3ff;
 }
+
 .bubble {
     display:inline-block;
     padding:10px 14px;
@@ -43,6 +45,12 @@
 }
 .bubble.me { background:#0d6efd; color:#fff; border-bottom-right-radius:4px; }
 .bubble.them { background:#fff; color:#222; border:1px solid rgba(10,20,40,0.06); border-bottom-left-radius:4px; }
+
+/* Recomendaciones cards */
+.reco-card { border-radius:12px; overflow:hidden; }
+.reco-img { height:140px; object-fit:cover; display:block; width:100%; }
+.reco-title { font-size:0.95rem; font-weight:700; margin-bottom:6px; }
+.reco-desc { font-size:0.82rem; color:#6c757d; margin-bottom:8px; }
 </style>
 
 <div class="row mt-4">
@@ -105,6 +113,137 @@
         </div>
       </form>
 
+      <!-- ================================================= -->
+      <!-- RECOMENDACIONES PERSONALIZADAS -->
+      <!-- ================================================= -->
+      <div class="mt-4">
+        <h5 class="text-primary">Recomendaciones personalizadas</h5>
+        <div class="small text-muted mb-2" id="reco-subtitle">Otros productos de <span id="reco-username">...</span></div>
+        <div id="recom-container" class="row g-3"></div>
+      </div>
+
+      <script>
+      // Leer token CSRF desde el formulario ya presente
+      function getCsrfToken() {
+          const el = document.querySelector('[name=csrfmiddlewaretoken]');
+          return el ? el.value : '';
+      }
+
+      // Carga los productos del otro usuario vía tu endpoint api_productos_usuario_chat
+      async function cargarRecomendaciones() {
+          const urlTemplate = "{% url 'api_productos_usuario_chat' 0 %}";
+          // urlTemplate tiene un /0/ que reemplazamos por el id de chat seleccionado
+          const url = urlTemplate.replace('/0/', "/{{ chat_seleccionado.id }}/");
+
+          try {
+              const res = await fetch(url);
+              if (!res.ok) {
+                  console.error("No se pudieron cargar recomendaciones:", res.status);
+                  return;
+              }
+
+              const data = await res.json();
+              const cont = document.getElementById("recom-container");
+              const subtitleUser = document.getElementById("reco-username");
+              cont.innerHTML = "";
+
+              if (!data.productos || data.productos.length === 0) {
+                  cont.innerHTML = `<div class='text-muted'>Este usuario no tiene productos publicados.</div>`;
+                  return;
+              }
+
+              // Mostrar hasta 3 productos
+              data.productos.slice(0,3).forEach(p => {
+                  
+                  {% for u in chat_seleccionado.usuarios.all %}
+                    {% if u != user %}
+                      subtitleUser.innerText = "{{ u.username }}";
+                    {% endif %}
+                  {% endfor %}
+
+                  const divCol = document.createElement("div");
+                  divCol.className = "col-md-4";
+
+                  // Botón para ofrecer trueque: hará POST a la misma ruta del chat (window.location.pathname)
+                  divCol.innerHTML = `
+                  <div class="card shadow-sm h-100 reco-card">
+                      <img src="${p.imagen}" class="reco-img" onerror="this.src='/static/img/Nofoto.png'">
+                      <div class="card-body d-flex flex-column">
+                          <div class="reco-title">${escapeHtml(p.nombre)}</div>
+                          <div class="reco-desc">${escapeHtml(p.descripcion)}</div>
+
+                          <div class="mt-auto">
+                              <form class="ofrecerTruequeForm" data-producto-id="${p.id}">
+                                  <input type="hidden" name="action" value="ofrecer_trueque">
+                                  <input type="hidden" name="producto_id" value="${p.id}">
+                                  <button type="submit" class="btn btn-primary w-100 btn-sm">Ofrecer trueque</button>
+                              </form>
+                          </div>
+                      </div>
+                  </div>
+                  `;
+
+                  cont.appendChild(divCol);
+              });
+
+              // Attach handlers after appending
+              document.querySelectorAll(".ofrecerTruequeForm").forEach(form => {
+                  form.addEventListener("submit", async (e) => {
+                      e.preventDefault();
+                      const productoId = form.getAttribute("data-producto-id");
+                      await ofrecerTruequeDesdeChat(productoId, form);
+                  });
+              });
+
+          } catch (err) {
+              console.error("Error cargando recomendaciones:", err);
+          }
+      }
+
+      // Envía el POST para crear trueque usando la ruta del chat actual (evita dependencias de nombres de URL)
+      async function ofrecerTruequeDesdeChat(productoId, formEl=null) {
+          const path = window.location.pathname; // ej: /chat/1/
+          const token = getCsrfToken();
+          const body = new URLSearchParams();
+          body.append("action", "ofrecer_trueque");
+          body.append("producto_id", productoId);
+
+          try {
+              const res = await fetch(path, {
+                  method: "POST",
+                  headers: {
+                      "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                      "X-CSRFToken": token
+                  },
+                  body: body.toString()
+              });
+
+              // Si tu view redirige (302) el fetch seguirá la redirección automáticamente.
+              // Intentamos leer JSON, pero si responde con redirect/HTML, asumimos éxito si ok.
+              if (res.ok) {
+                  // Mostrar feedback y actualizar botones si fuera necesario
+                  mostrarToast("Solicitud de trueque enviada.", "success");
+                  // Opcional: deshabilitar el botón
+                  if (formEl) {
+                      const btn = formEl.querySelector("button");
+                      if (btn) { btn.innerText = "Enviado"; btn.disabled = true; }
+                  }
+              } else {
+                  // Intentar leer cuerpo con mensaje
+                  let txt = await res.text();
+                  console.error("Error al ofrecer trueque:", res.status, txt);
+                  mostrarToast("Error enviando oferta", "danger");
+              }
+          } catch (err) {
+              console.error("Error en fetch ofrecerTrueque:", err);
+              mostrarToast("Error de conexión", "danger");
+          }
+      }
+
+      // Inicializa recomendaciones en carga
+      cargarRecomendaciones();
+      </script>
+
     {% else %}
       <div class="text-muted">Selecciona un chat para comenzar a conversar.</div>
     {% endif %}
@@ -112,7 +251,7 @@
 </div>
 
 <!-- Overlay de calificación -->
-<div id="calificacionOverlay" style="display:none;">
+<div id="calificacionOverlay">
   <div class="calificacion-card text-center">
     <button id="cerrarCalif" class="btn-close float-end" aria-label="Cerrar"></button>
     <h4 class="mb-2">Calificar vendedor</h4>
@@ -157,7 +296,6 @@ function escapeHtml(t) {
 const chatId = "{{ chat_seleccionado.id }}" || null;
 let lastMessageId = 0;
 
-/* Inicializar scroll */
 (function initLastId() {
   const box = document.getElementById('chat-box');
   if (!box) return;
@@ -168,7 +306,6 @@ let lastMessageId = 0;
   box.scrollTop = box.scrollHeight;
 })();
 
-/* Polling de mensajes */
 if (chatId) {
   setInterval(async () => {
     try {
@@ -190,8 +327,7 @@ if (chatId) {
             <div class="small text-muted mb-1"><strong>${escapeHtml(m.autor)}</strong></div>
             <div>${escapeHtml(m.contenido)}</div>
             <div class="small text-muted mt-1">${escapeHtml(m.fecha)}</div>
-          </div>
-        `;
+          </div>`;
         box.appendChild(wrapper);
         lastMessageId = m.id;
         box.scrollTop = box.scrollHeight;
@@ -202,7 +338,6 @@ if (chatId) {
   }, 2000);
 }
 
-/* Enviar mensaje */
 const chatForm = document.getElementById("chat-form");
 if (chatForm) {
   chatForm.addEventListener("submit", async (e) => {
@@ -238,18 +373,16 @@ if (chatForm) {
   });
 }
 
-/* Reporte */
 const btnReportar = document.getElementById("btn-reportar");
 if (btnReportar) {
   btnReportar.addEventListener("click", () => {
     mostrarToast(
-      "El equipo de soporte de Swap Place revisará su reporte y le informará dentro de 72 hrs.",
+      "El equipo de soporte revisará el reporte y enviará respuesta dentro de 72 hrs.",
       "danger"
     );
   });
 }
 
-/* Calificación */
 const overlay = document.getElementById("calificacionOverlay");
 const btnCalificar = document.getElementById("btn-calificar");
 const cerrarCalifBtn = document.getElementById("cerrarCalif");
@@ -257,35 +390,22 @@ const enviarCalifBtn = document.getElementById("enviarCalif");
 const stars = document.querySelectorAll(".star");
 let calificacion = 0;
 
-function abrirOverlayCalif() {
-  if (!overlay) return;
+if (btnCalificar) btnCalificar.addEventListener("click", () => {
   overlay.style.display = "flex";
-  overlay.classList.add('d-flex');
-  calificacion = 0;
-  stars.forEach(s => s.classList.remove("selected"));
-}
+});
 
-function cerrarOverlayCalif() {
-  if (!overlay) return;
+if (cerrarCalifBtn) cerrarCalifBtn.addEventListener("click", () => {
   overlay.style.display = "none";
-  overlay.classList.remove('d-flex');
-}
+});
 
-if (btnCalificar) btnCalificar.addEventListener("click", abrirOverlayCalif);
-if (cerrarCalifBtn) cerrarCalifBtn.addEventListener("click", cerrarOverlayCalif);
-if (overlay) overlay.addEventListener("click", e => { if (e.target === overlay) cerrarOverlayCalif(); });
-
-if (stars && stars.length) {
-  stars.forEach((s, i) => {
-    s.addEventListener("click", () => {
-      calificacion = i + 1;
-      stars.forEach(st => st.classList.remove("selected"));
-      for (let j = 0; j <= i; j++) stars[j].classList.add("selected");
-    });
+stars.forEach((s, i) => {
+  s.addEventListener("click", () => {
+    calificacion = i + 1;
+    stars.forEach(st => st.classList.remove("selected"));
+    for (let j = 0; j <= i; j++) stars[j].classList.add("selected");
   });
-}
+});
 
-/* Enviar calificación al backend */
 if (enviarCalifBtn) {
   enviarCalifBtn.addEventListener("click", async () => {
     if (!calificacion)
@@ -307,8 +427,8 @@ if (enviarCalifBtn) {
       const data = await res.json();
 
       if (res.ok && data.ok) {
-        cerrarOverlayCalif();
-        mostrarToast(`Calificación enviada: ${calificacion} ⭐`, "success");
+        overlay.style.display = "none";
+        mostrarToast(`Calificación enviada: ${calificacion} ⭐`);
       } else {
         mostrarToast(data.error || "Error enviando calificación", "danger");
       }

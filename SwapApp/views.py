@@ -324,6 +324,70 @@ def chat_list_view(request):
 
 
 @login_required
+def chat_view(request, chat_id):
+    chat = get_object_or_404(Chat, pk=chat_id)
+
+    # Usuario actual y el otro usuario del chat
+    mi_usuario = request.user
+    otro_usuario = chat.usuarios.exclude(id=mi_usuario.id).first()
+
+    mensajes = chat.mensajes.order_by("fecha")
+
+    # Recomendaciones: productos del otro usuario
+    productos_recomendados = Producto.objects.filter(
+        usuario=otro_usuario
+    ).order_by("-fecha_agregado")[:5]
+
+    # Productos del usuario actual (para ofrecer trueque)
+    productos_usuario = Producto.objects.filter(usuario=mi_usuario)
+
+    # AJAX refresco del chat
+    if request.GET.get("ajax"):
+        return render(request, "chat_mensajes.html", {"mensajes": mensajes})
+
+    # Enviar mensaje
+    if request.method == "POST" and request.POST.get("mensaje"):
+        Mensaje.objects.create(
+            chat=chat,
+            autor=request.user,
+            contenido=request.POST["mensaje"]
+        )
+        return redirect("chat", chat_id=chat.id)
+
+    return render(request, "chat.html", {
+        "chat": chat,
+        "mensajes": mensajes,
+        "otro_usuario": otro_usuario,
+        "productos_usuario": productos_usuario,
+        "productos_recomendados": productos_recomendados,
+    })
+
+@login_required
+def crear_trueque_desde_chat(request):
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=400)
+
+    producto_id = request.POST.get("producto_id")
+
+    try:
+        producto = Producto.objects.get(id=producto_id)
+    except Producto.DoesNotExist:
+        return JsonResponse({"error": "Producto no encontrado"}, status=404)
+
+    # Usuario dueño del producto
+    propietario = producto.usuario
+
+    # Crear el trueque
+    Trueque.objects.create(
+        solicitante=request.user,
+        receptor=propietario,
+        producto_ofrecido=None, 
+        producto_solicitado=producto,
+        estado="pendiente"
+    )
+
+    return JsonResponse({"success": True})
+@login_required
 def chat_detalle(request, chat_id):
     chat = get_object_or_404(Chat, id=chat_id)
     if request.user not in chat.usuarios.all():
@@ -402,6 +466,24 @@ def api_fetch_messages(request, chat_id):
     } for m in msgs]
     return JsonResponse({'mensajes': datos})
 
+def api_productos_usuario_chat(request, chat_id):
+    chat = get_object_or_404(Chat, id=chat_id)
+
+    # Obtener otro usuario correctamente desde ManyToMany
+    otro_usuario = chat.usuarios.exclude(id=request.user.id).first()
+
+    productos = Producto.objects.filter(usuario=otro_usuario)
+
+    data = []
+    for p in productos:
+        data.append({
+            "id": p.id,
+            "nombre": p.nombre,
+            "descripcion": p.descripcion[:40] + "...",
+            "imagen": p.imagen.url if p.imagen else "/static/img/Nofoto%5.png",
+        })
+
+    return JsonResponse({"productos": data})
 
 # ---------------------- NOTIFICACIONES ----------------------
 @login_required
